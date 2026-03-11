@@ -521,7 +521,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               style={{ background: isInProgress ? '#F44336' : '#BDBDBD', cursor: isInProgress ? 'pointer' : 'not-allowed' }}>
               {finishing
                 ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                : '🏁 FINISH LIMPIEZA'}
+                : '🏁 TERMINAR LIMPIEZA'}
             </button>
           </div>
         </div>
@@ -584,3 +584,4 @@ function TaskChecklist({ tasks, completedTasks, onToggle }: {
     </div>
   );
 }
+
