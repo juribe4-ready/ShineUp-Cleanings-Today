@@ -11,6 +11,7 @@ export default createEndpoint({
       id: z.string(),
       cleaningId: z.string().optional(),
       propertyText: z.string().optional(),
+      propertyId: z.string().optional(),
       bookUrl: z.string().optional(),
       cleaningTypeText: z.string().optional(),
       status: z.string().optional(),
@@ -25,7 +26,7 @@ export default createEndpoint({
       comments: z.string().optional(),
       incidentComments: z.string().optional(),
       inventoryComments: z.string().optional(),
-      videoInicial: z.string().optional(),
+      videoInicial: z.array(z.string()).optional(),
       photosVideos: z.array(z.any()).optional(),
       rating: z.number().optional(),
       driveMedia: z.string().optional(),
@@ -83,8 +84,11 @@ export default createEndpoint({
             
             const text = rec?.EquipmentText || rec?.equipmentText || 'Sin nombre';
             
-            // Intentar en orden: EquipmentID > EquipmentIDText > Equipment Name > Make > EquipmentText
+            // Intentar en orden: EquipmentCode (campo principal) > otros fallbacks
             const code = 
+              rec?.EquipmentCode ||
+              rec?.equipmentCode ||
+              rec?.['Equipment Code'] ||
               rec?.EquipmentID || 
               rec?.equipmentID || 
               rec?.['Equipment ID'] ||
@@ -125,6 +129,7 @@ export default createEndpoint({
         id: cleaning.id,
         cleaningId: cleaning.cleaningId,
         propertyText: cleaning.propertyText,
+        propertyId: propertyIds[0] || '',
         bookUrl,
         cleaningTypeText: cleaning.cleaningTypeText,
         status: cleaning.status,
@@ -140,9 +145,9 @@ export default createEndpoint({
         incidentComments: raw.incidentComments || raw.IncidentComments || "",
         inventoryComments: raw.inventoryComments || raw.InventoryComments || "",
         initialComments,
-        videoInicial: Array.isArray(raw.videoInicial) && raw.videoInicial.length > 0
-          ? (raw.videoInicial[0]?.thumbnails?.large?.url || raw.videoInicial[0]?.url || "")
-          : "",
+        videoInicial: Array.isArray(raw.videoInicial)
+          ? raw.videoInicial.map((v: any) => v?.thumbnails?.large?.url || v?.url).filter(Boolean)
+          : [],
         photosVideos: raw.driveMedia 
           ? [{ url: raw.driveMedia, filename: 'Video de Drive' }, ...(cleaning.photosVideos || [])]
           : (cleaning.photosVideos || []),
