@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Home, Play, BarChart2, Flag, Camera, Star, BookOpen, Package, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Home, Play, BarChart2, Flag, Camera, Star, BookOpen, Package, CheckCircle2, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadFile } from 'zite-file-upload-sdk';
 import {
@@ -91,7 +91,19 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     const refMap: Record<TabType, React.RefObject<HTMLDivElement>> = {
       detalle: detalleRef, inicio: inicioRef, reporte: reporteRef, cierre: cierreRef,
     };
-    refMap[tab].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Scroll to section with offset for sticky header
+    const element = refMap[tab].current;
+    if (element) {
+      const headerOffset = 200; // Altura del header sticky + margen extra
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
   };
 
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -222,7 +234,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             <span className="text-white font-black text-base tracking-tight block leading-tight">
               {(details?.propertyText || 'DILINI').toUpperCase()}
             </span>
-            {/* CLEANING TYPE DEBAJO */}
             <p className="text-white/80 text-[10px] font-semibold uppercase tracking-wide mt-0.5">
               {details?.cleaningTypeText || 'Standard STR Turnover'}
             </p>
@@ -283,23 +294,42 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               )}
             </div>
 
-            <div className="rounded-xl overflow-hidden border border-slate-100">
-              {[
-                { label: 'HORA SCHEDULED', value: formatTime(details?.scheduledTime), bold: true },
-                { label: 'INICIO REAL',    value: formatTime(details?.startTime) },
-                { label: 'TÉRMINO REAL',   value: formatTime(details?.endTime) },
-              ].map(({ label, value, bold }) => (
-                <div key={label} className="flex justify-between items-center px-4 py-3 border-b border-slate-50 last:border-0">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">{label}</span>
-                  <span className={`text-[14px] ${bold ? 'font-black text-slate-900' : 'font-bold text-slate-500'}`}>{value}</span>
-                </div>
-              ))}
-            </div>
+            {/* BOOK BUTTON - PROMINENTE */}
+            {details?.bookUrl && (
+              <a href={details.bookUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl text-[13px] font-black transition-all active:scale-95 shadow-md"
+                style={{ background: TEAL_LIGHT, color: TEAL }}>
+                <BookOpen className="w-4 h-4" /> Ver Book de la Propiedad
+              </a>
+            )}
 
-            <div>
-              <span className="inline-block px-3 py-1 rounded-full text-[12px] font-black" style={{ background: TEAL_LIGHT, color: TEAL }}>
-                {details?.cleaningTypeText || 'Standard STR Turnover'}
-              </span>
+            {/* TABLA DE HORAS 2x2 */}
+            <div className="rounded-xl overflow-hidden border border-slate-200">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="text-left px-4 py-2 font-bold text-slate-400 uppercase tracking-wide"></th>
+                    <th className="text-center px-3 py-2 font-black text-slate-600 uppercase tracking-wide">Progr.</th>
+                    <th className="text-center px-3 py-2 font-black text-slate-600 uppercase tracking-wide">Real</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-slate-100">
+                    <td className="px-4 py-3 font-semibold text-slate-400 uppercase tracking-wide">HORA INICIO</td>
+                    <td className="px-3 py-3 text-center font-black text-slate-900">{formatTime(details?.scheduledTime)}</td>
+                    <td className="px-3 py-3 text-center font-bold text-slate-500">{formatTime(details?.startTime)}</td>
+                  </tr>
+                  <tr className="border-t border-slate-100">
+                    <td className="px-4 py-3 font-semibold text-slate-400 uppercase tracking-wide">HORA FIN</td>
+                    <td className="px-3 py-3 text-center font-black text-slate-900">
+                      {details?.scheduledTime 
+                        ? formatTime(new Date(new Date(details.scheduledTime).getTime() + 90 * 60000).toISOString())
+                        : '--:--'}
+                    </td>
+                    <td className="px-3 py-3 text-center font-bold text-slate-500">{formatTime(details?.endTime)}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
             {details?.assignedStaffNames?.length ? (
@@ -332,6 +362,21 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               </div>
             ) : null}
+
+            {/* INITIAL COMMENTS */}
+            {details?.initialComments && (
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#FFF3E0' }}>
+                  <MessageSquare className="w-4 h-4" style={{ color: '#FF9800' }} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Instrucciones de esta limpieza</p>
+                  <div className="rounded-xl px-3 py-3 bg-amber-50 border border-amber-100">
+                    <p className="text-[13px] text-slate-700 leading-relaxed">{details.initialComments}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -434,13 +479,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             <p className="font-bold text-slate-800 text-[14px] leading-snug">
               Reportar los faltantes de inventario y las incidencias en cada una de sus respectivas casillas
             </p>
-            {details?.bookUrl && (
-              <a href={details.bookUrl} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-3 rounded-xl text-[13px] font-bold transition-all active:scale-95"
-                style={{ background: TEAL_LIGHT, color: TEAL }}>
-                <BookOpen className="w-4 h-4" /> Ver Book de la propiedad
-              </a>
-            )}
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Reportar Incidentes</p>
               <textarea value={incidentComments} onChange={e => handleIncidentChange(e.target.value)}
@@ -584,4 +622,3 @@ function TaskChecklist({ tasks, completedTasks, onToggle }: {
     </div>
   );
 }
-
