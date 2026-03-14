@@ -9,7 +9,7 @@ export default createEndpoint({
     endTime:      z.string().optional(),
     status:       z.string().optional(),
     comments:          z.string().optional(),
-    videoInicial:      z.string().optional(),
+    videoInicialUrls:  z.array(z.string()).optional(),
     rating:            z.number().optional(),
     incidentComments:  z.string().optional(),
     inventoryComments: z.string().optional(),
@@ -24,7 +24,18 @@ export default createEndpoint({
     if (input.endTime      !== undefined) updateData.endTime      = input.endTime;
     if (input.status       !== undefined) updateData.status       = input.status;
     if (input.comments          !== undefined) updateData.Comments         = input.comments;
-    if (input.videoInicial      !== undefined) updateData.VideoInicial     = input.videoInicial;
+    if (input.videoInicialUrls  !== undefined) {
+      // Airtable attachment format — pass existing attachments to keep them, add new ones
+      const existing = await (async () => {
+        try {
+          const { Cleanings } = await import('zite-integrations-backend-sdk');
+          const rec = await Cleanings.findOne({ id: input.cleaningId }) as any;
+          return Array.isArray(rec?.videoInicial) ? rec.videoInicial : [];
+        } catch { return []; }
+      })();
+      const newAttachments = input.videoInicialUrls.map(url => ({ url }));
+      updateData.VideoInicial = [...existing, ...newAttachments];
+    }
     if (input.rating !== undefined) {
       const ratingMap: Record<number, string> = { 1: '⭐ Malo', 2: '⭐⭐ Normal', 3: '⭐⭐⭐ Bueno' };
       updateData.rating = ratingMap[input.rating] || input.rating;
