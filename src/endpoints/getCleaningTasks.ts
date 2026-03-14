@@ -12,6 +12,7 @@ export default createEndpoint({
       cleaningId: z.string().optional(),
       propertyText: z.string().optional(),
       propertyId: z.string().optional(),
+      closingMediaType: z.string().optional(),
       bookUrl: z.string().optional(),
       cleaningTypeText: z.string().optional(),
       status: z.string().optional(),
@@ -84,11 +85,8 @@ export default createEndpoint({
             
             const text = rec?.EquipmentText || rec?.equipmentText || 'Sin nombre';
             
-            // Intentar en orden: EquipmentCode (campo principal) > otros fallbacks
+            // Intentar en orden: EquipmentID > EquipmentIDText > Equipment Name > Make > EquipmentText
             const code = 
-              rec?.EquipmentCode ||
-              rec?.equipmentCode ||
-              rec?.['Equipment Code'] ||
               rec?.EquipmentID || 
               rec?.equipmentID || 
               rec?.['Equipment ID'] ||
@@ -115,12 +113,14 @@ export default createEndpoint({
     // Book URL y InitialComments
     let bookUrl = "";
     let initialComments = "";
+    let closingMediaType = "";
     const propertyIds: string[] = Array.isArray(raw.property) ? raw.property : (raw.property ? [raw.property] : []);
     if (propertyIds.length > 0) {
       try {
         const prop = await Properties.findOne({ id: propertyIds[0] }) as any;
         bookUrl = prop?.['Book URL'] || prop?.bookUrl || prop?.BookURL || "";
         initialComments = raw.initialComments || raw.InitialComments || prop?.InitialComments || prop?.initialComments || "";
+        closingMediaType = prop?.['Video/Photo'] || prop?.VideoPhoto || prop?.videoPhoto || "";
       } catch { /* ignore */ }
     }
 
@@ -130,6 +130,7 @@ export default createEndpoint({
         cleaningId: cleaning.cleaningId,
         propertyText: cleaning.propertyText,
         propertyId: propertyIds[0] || '',
+        closingMediaType,
         bookUrl,
         cleaningTypeText: cleaning.cleaningTypeText,
         status: cleaning.status,
@@ -146,7 +147,7 @@ export default createEndpoint({
         inventoryComments: raw.inventoryComments || raw.InventoryComments || "",
         initialComments,
         videoInicial: Array.isArray(raw.videoInicial)
-          ? raw.videoInicial.map((v: any) => v?.thumbnails?.large?.url || v?.url).filter(Boolean)
+          ? raw.videoInicial.map((v: any) => v?.thumbnails?.large?.url || v?.url || '').filter(Boolean)
           : [],
         photosVideos: raw.driveMedia 
           ? [{ url: raw.driveMedia, filename: 'Video de Drive' }, ...(cleaning.photosVideos || [])]
