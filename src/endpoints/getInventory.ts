@@ -66,9 +66,17 @@ export default createEndpoint({
         reportedBy: reportedByName,
       };
     }).sort((a, b) => {
+      // 1. Fecha desc
       const dateA = a.date ? new Date(a.date).getTime() : 0;
       const dateB = b.date ? new Date(b.date).getTime() : 0;
-      return dateB - dateA;
+      if (dateB !== dateA) return dateB - dateA;
+      // 2. Status
+      const statusOrder: Record<string, number> = { 'Out of Stock': 0, 'Low': 1, 'Optimal': 2 };
+      const sA = statusOrder[a.status] ?? 99;
+      const sB = statusOrder[b.status] ?? 99;
+      if (sA !== sB) return sA - sB;
+      // 3. Comment
+      return (a.comment || '').localeCompare(b.comment || '');
     });
   },
 });
