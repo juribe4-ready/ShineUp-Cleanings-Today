@@ -31,7 +31,6 @@ export default createEndpoint({
       return true;
     });
 
-    // Collect all unique staff IDs to resolve names in one pass
     const staffIds = new Set<string>();
     filtered.forEach((inc: any) => {
       const ids = Array.isArray(inc.reportedBy) ? inc.reportedBy : (inc['Reported By'] ? [inc['Reported By']] : []);
@@ -62,10 +61,10 @@ export default createEndpoint({
       const reportedByName = reportedByIds.map(id => staffMap[id] || id).join(', ');
 
       const commentVal = inc.comment || inc.Comment || inc.comments || inc.Comments ||
-        Object.entries(inc).find(([k, v]) => 
-          typeof v === 'string' && 
-          (v as string).length > 3 && 
-          !k.startsWith('rec') && 
+        Object.entries(inc).find(([k, v]) =>
+          typeof v === 'string' &&
+          (v as string).length > 3 &&
+          !k.startsWith('rec') &&
           k !== 'name' && k !== 'status' && k !== 'creationDate' &&
           k !== 'id' && k !== 'recordID' &&
           k !== 'fld81j7b92LxC494L' &&
@@ -73,7 +72,7 @@ export default createEndpoint({
           !(v as string).startsWith('CLN-') &&
           !(v as string).startsWith('rec')
         )?.[1] as string || '';
-      console.log('[INC FULL]', JSON.stringify(inc));
+
       return {
         id: inc.id,
         name: inc.name || inc.Name || 'Sin nombre',
@@ -83,6 +82,18 @@ export default createEndpoint({
         photoUrls: photos,
         reportedBy: reportedByName || '',
       };
+    }).sort((a, b) => {
+      // 1. Fecha desc
+      const dateA = a.creationDate ? new Date(a.creationDate).getTime() : 0;
+      const dateB = b.creationDate ? new Date(b.creationDate).getTime() : 0;
+      if (dateB !== dateA) return dateB - dateA;
+      // 2. Status
+      const statusOrder: Record<string, number> = { 'Reported': 0, 'In Progress': 1, 'Closed': 2 };
+      const sA = statusOrder[a.status] ?? 99;
+      const sB = statusOrder[b.status] ?? 99;
+      if (sA !== sB) return sA - sB;
+      // 3. Name
+      return (a.name || '').localeCompare(b.name || '');
     });
   },
 });
