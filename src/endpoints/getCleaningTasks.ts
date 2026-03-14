@@ -30,6 +30,7 @@ export default createEndpoint({
       rating: z.number().optional(),
       driveMedia: z.string().optional(),
       equipment: z.array(z.object({ text: z.string(), code: z.string() })).optional(),
+      initialComments: z.string().optional(),
     }),
     tasks: z.array(z.any()),
   }),
@@ -67,13 +68,11 @@ export default createEndpoint({
       })).sort((a, b) => (a.order || 0) - (b.order || 0));
     }
 
-    // Equipment — IDs stored in Cleanings.Equipment, look up Equipment table for EquipmentText + EquipmentID
+    // Equipment — USAR EquipmentIDText
     const raw = cleaning as any;
     const equipmentIds: string[] = Array.isArray(raw['Equipment'] || raw.equipment)
       ? (raw['Equipment'] || raw.equipment)
       : raw['Equipment'] ? [raw['Equipment']] : [];
-
-    console.log('[DEBUG] Equipment IDs:', JSON.stringify(equipmentIds));
 
     let equipment: { text: string; code: string }[] = [];
     if (equipmentIds.length > 0) {
@@ -81,10 +80,26 @@ export default createEndpoint({
         equipmentIds.map(async (id: string) => {
           try {
             const rec = await Equipment.findOne({ id }) as any;
-            return {
-              text: rec?.EquipmentText || rec?.equipmentText || 'Sin nombre',
-              code: rec?.EquipmentIDText || rec?.equipmentIDText || id,
-            };
+            
+            const text = rec?.EquipmentText || rec?.equipmentText || 'Sin nombre';
+            
+            // Intentar en orden: EquipmentID > EquipmentIDText > Equipment Name > Make > EquipmentText
+            const code = 
+              rec?.EquipmentID || 
+              rec?.equipmentID || 
+              rec?.['Equipment ID'] ||
+              rec?.EquipmentIDText || 
+              rec?.equipmentIDText ||
+              rec?.['Equipment Name'] || 
+              rec?.equipmentName || 
+              rec?.EquipmentName ||
+              rec?.Make || 
+              rec?.make ||
+              rec?.EquipmentText ||
+              rec?.equipmentText ||
+              'N/A';
+            
+            return { text, code };
           } catch {
             return { text: id, code: id };
           }
@@ -93,17 +108,17 @@ export default createEndpoint({
       equipment = equipRecords.filter(Boolean) as { text: string; code: string }[];
     }
 
-    // Book URL — look up Properties table
+    // Book URL y InitialComments
     let bookUrl = "";
+    let initialComments = "";
     const propertyIds: string[] = Array.isArray(raw.property) ? raw.property : (raw.property ? [raw.property] : []);
     if (propertyIds.length > 0) {
       try {
         const prop = await Properties.findOne({ id: propertyIds[0] }) as any;
         bookUrl = prop?.['Book URL'] || prop?.bookUrl || prop?.BookURL || "";
+        initialComments = raw.initialComments || raw.InitialComments || prop?.InitialComments || prop?.initialComments || "";
       } catch { /* ignore */ }
     }
-
-    console.log('[getCleaningTasks] cleaningTypeText:', cleaning.cleaningTypeText, '| equipment:', JSON.stringify(equipment));
 
     return {
       cleaning: {
@@ -124,6 +139,7 @@ export default createEndpoint({
         comments: raw.Comments || raw.comments || "",
         incidentComments: raw.incidentComments || raw.IncidentComments || "",
         inventoryComments: raw.inventoryComments || raw.InventoryComments || "",
+        initialComments,
         videoInicial: Array.isArray(raw.videoInicial) && raw.videoInicial.length > 0
           ? (raw.videoInicial[0]?.thumbnails?.large?.url || raw.videoInicial[0]?.url || "")
           : "",
@@ -134,7 +150,6 @@ export default createEndpoint({
           const r = raw.rating || raw.Rating;
           if (!r) return undefined;
           if (typeof r === 'number') return r;
-          // Airtable select: "⭐ Malo" = 1, "⭐⭐ Normal" = 2, "⭐⭐⭐ Bueno" = 3
           const s = String(r);
           if (s.includes('⭐⭐⭐') || s.toLowerCase().includes('bueno')) return 3;
           if (s.includes('⭐⭐') || s.toLowerCase().includes('normal')) return 2;
