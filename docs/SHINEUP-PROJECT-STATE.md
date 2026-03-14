@@ -1,208 +1,101 @@
+# ShineUP Ops - Estado del Proyecto
 
-# 🧹 ShineUP - Estado del Proyecto
-**Última actualización:** 10 de Marzo, 2026 - 2:00 PM
-
----
-
-## 📱 **APPS ACTIVAS**
-
-### **1. App Principal ShineUP (Staff Mobile)**
-**Plataforma:** Zite (build.fillout.com)  
-**Usuarios:** Cleaning staff (móvil)  
-**Estado:** ✅ Funcionando perfectamente
-
-**Archivos actuales:**
-- `src/components/App.tsx` - App principal (fixed hooks, optimizado)
-- `src/components/CleaningCard.tsx` - Cards de limpiezas (con memo)
-- `src/components/CalendarView.tsx` - Vista semanal (optimizada)
-- `src/components/CleaningChecklist.tsx` - Detalle con tabs + mejoras UX
-
-### **2. Dashboard Timeline (Admin Desktop)**
-**Plataforma:** Zite (proyecto separado)  
-**Usuarios:** Owner/Admin  
-**Estado:** ⚠️ Creado pero sin conectar a datos (pendiente)
+## Stack
+- **Frontend:** React + TypeScript, Zite (build.fillout.com)
+- **Backend:** Airtable (base: ShineUpCleaningJobScheduler `appBwnoxgyIXILe6M`)
+- **Auth:** Zite Auth SDK
+- **Estilos:** Tailwind + Poppins + mobile-first
+- **Colores:** Teal `#00BCD4`, Teal Dark `#0097A7`, Teal Light `#E0F7FA`, Gold `#FFD700`
 
 ---
 
-## 🔧 **ENDPOINTS (Backend - Zite)**
+## Archivos
 
-| Endpoint | Función | Estado |
-|----------|---------|--------|
-| `getCleaning.ts` | Obtener cleanings por staff/fecha | ✅ Funcionando |
-| `getCleaningTasks.ts` | Obtener tareas y detalles | ✅ Funcionando |
-| `updateCleaningTime.ts` | Actualizar tiempos/status | ✅ Funcionando |
-| `UploadCleaningPhotos.ts` | Subir fotos a Google Drive | ✅ Funcionando |
+### Componentes (`src/components/`)
+| Archivo | Descripcion |
+|---|---|
+| `App.tsx` | Dashboard principal: lista limpiezas del dia, stats, busqueda, vista semanal |
+| `CleaningChecklist.tsx` | Detalle de limpieza: 4 secciones DETALLE / INICIO / REPORTE / CIERRE |
+| `CleaningCard.tsx` | Card de limpieza en el dashboard |
+| `CalendarView.tsx` | Vista semanal |
 
----
-
-## 🗄️ **BASE DE DATOS (Airtable)**
-
-**Tablas principales:**
-- `Cleanings` - Limpiezas programadas
-- `Staff` - Personal (con User Sync configurado)
-- `Properties` - Propiedades
-- `Equipment` - Equipamiento
-- `Checklist Templates Tasks` - Tareas del checklist
-
-**User Sync configurado:**
-- Table: Staff
-- Email field: Email
-- First name: Name
+### Endpoints (`src/endpoints/`)
+| Archivo | Descripcion |
+|---|---|
+| `getCleaning.ts` | Lista limpiezas filtradas por fecha/usuario |
+| `getCleaningTasks.ts` | Detalle completo: tareas, equipo, horarios, propertyId, closingMediaType |
+| `updateCleaningTime.ts` | Actualiza startTime, endTime, status, rating, videoInicialUrls |
+| `UploadCleaningPhotos.ts` | Sube fotos cierre (acumula, no sobreescribe) |
+| `getIncidents.ts` | Incidentes por propiedad (excluye Closed), orden: fecha desc, status, nombre |
+| `createIncidents.ts` | Crea incidente con foto, propertyId, cleaningId |
+| `getInventory.ts` | Inventario cliente por propiedad (excluye Optimal), orden: fecha desc, status, comment |
+| `addInventory.ts` | Crea registro inventario (Low / Out of Stock) |
 
 ---
 
-## ✅ **CAMBIOS RECIENTES - Sesión 2026-03-10**
-
-### **1. App Principal - Error Fixes:**
-- ✅ **React Hook Error #310 resuelto**
-  - Problema: Hooks llamados después de returns condicionales
-  - Solución: Movidos todos los hooks antes de cualquier return
-  - Archivo: `App.tsx`
-
-- ✅ **User Sync 403 Error resuelto**
-  - Problema: Integración de Airtable desconectada
-  - Solución: Reconfigurado en Settings → Access
-  - User table: Staff, Email field: Email
-
-- ✅ **Cleanings no aparecían**
-  - Problema: Discrepancia Date vs Scheduled Time
-  - Solución: Corregido Scheduled Time en Airtable
-  - Status: Funcionando
-
-### **2. CleaningChecklist - Mejoras UX:**
-
-**Header Completo Rediseñado:**
-
-1. ✅ **Botón "Volver" más prominente**
-   - Antes: Pequeño, solo texto + flecha chica
-   - Ahora: Fondo blanco, flecha grande (strokeWidth: 3), padding amplio, sombra
-   - Efecto: active:scale-95
-   - Mucho más visible y clickeable
-
-2. ✅ **Layout reorganizado**
-   - Antes: Cleaning Type a la izquierda debajo de botón Volver
-   - Ahora: Property Text + Cleaning Type agrupados a la derecha
-   - Layout más limpio y organizado
-
-3. ✅ **Icono CIERRE cambiado**
-   - Antes: X (confuso, parecía cancelar)
-   - Ahora: Flag 🏁 (bandera de meta/finalización)
-   - Más claro que es para terminar limpieza
-
-4. ✅ **Botón Google Maps optimizado**
-   - V1: "✈ Mapa" (fondo celeste claro)
-   - V2: "🗺️ Google Maps" (muy grande)
-   - V3: Solo icono 📍 (muy minimalista)
-   - **FINAL: "📍 IR"** (perfecto balance: compacto + claro)
-   - Fondo teal sólido, blanco, shadow-sm
-   - Tamaño ideal para móvil (~40-45px ancho)
-
-### **3. Performance Optimizations:**
-- ✅ useMemo para filteredCleanings
-- ✅ useMemo para stats
-- ✅ Eliminadas optimizaciones complejas que causaban errores
+## Tablas Airtable
+| Tabla | ID |
+|---|---|
+| Cleanings | `tblabOdNknnjrYUU1` |
+| Incidents | `tbli8QbMBjUuzsCPw` |
+| Staff | `tblgHwN1wX6u3ZtNY` |
+| Properties | `tbl1iETmcFP460oWN` |
+| Equipment | `tblFOJpGUKpCC5hQO` |
+| ClientInventory | (habilitada via Zite AI) |
 
 ---
 
-## 🐛 **HISTORIAL DE PROBLEMAS RESUELTOS**
+## CleaningChecklist - Secciones
 
-| Problema | Solución | Fecha | Archivo |
-|----------|----------|-------|---------|
-| React Hook Error #310 | Hooks antes de returns | 2026-03-10 | App.tsx |
-| User sync 403 | Reconectado Settings→Access | 2026-03-10 | Zite config |
-| Cleanings no aparecen | Fixed Scheduled Time | 2026-03-10 | Airtable |
-| Botón Volver poco visible | Rediseño con fondo blanco | 2026-03-10 | CleaningChecklist.tsx |
-| Layout confuso header | Reagrupación elementos | 2026-03-10 | CleaningChecklist.tsx |
-| Icono X confuso en CIERRE | Cambiado a Flag | 2026-03-10 | CleaningChecklist.tsx |
-| Botón Mapa muy grande | Optimizado a "IR" compacto | 2026-03-10 | CleaningChecklist.tsx |
+### DETALLE
+- Nombre propiedad + direccion, boton IR (Maps), boton Book
+- Tabla horas programadas vs reales
+- Personal asignado, equipamiento con codigo (`EquipmentCode`), instrucciones (`initialComments`)
 
----
+### INICIO
+- Step 1: Subir video/foto inicial (multiple, acumula en campo Attachment `VideoInicial`)
+- Step 2: Calificar estado 1-3 estrellas
+- Step 3: Boton EMPEZAR LIMPIEZA → status `In Progress`
+- Checklist de tareas (aparece al iniciar)
+- **Cuando Done: grayscale + bloqueado + pointerEvents none**
 
-## 📋 **PENDIENTES**
+### REPORTE
+- **Inventario del Cliente** (primero): filtrado por propertyId
+- **Incidentes** (segundo): filtrado por propertyId
+- Ambos bloqueados hasta iniciar, boton + Nuevo, modal detalle
+- Scroll spy: el tab del header se activa segun scroll position
 
-### **Alta Prioridad:**
-- [ ] Dashboard Timeline - conectar a getCleanings endpoint
-- [ ] Testing con más usuarios reales
-
-### **Media Prioridad:**
-- [ ] Landing pages - implementar HTML/CSS (5 servicios)
-- [ ] Optimizaciones adicionales de performance (si es necesario)
-
-### **Baja Prioridad:**
-- [ ] Push notifications para nuevas asignaciones
-- [ ] Modo offline
-- [ ] Multi-idioma (ES/EN)
+### CIERRE
+- Fotos/videos de cierre (acumula)
+- Label del boton subir segun campo `Video/Photo` de Properties:
+  - `Photo` → "Subir Fotos" | `Video` → "Subir Videos" | vacio → "Subir fotos / videos"
+- Boton TERMINAR → status `Done`, vuelve al dashboard
+- **Cuando Done: grayscale + bloqueado, boton verde "LIMPIEZA TERMINADA"**
 
 ---
 
-## 🎨 **DESIGN SYSTEM**
-
-**Colores:**
-```css
-Primary:      #00BCD4  (TEAL)
-Dark:         #0097A7  (TEAL_DARK)
-Light:        #E0F7FA  (TEAL_LIGHT)
-Success:      #4CAF50  (GREEN)
-Gold:         #FFD700
-```
-
-**Fuente:** Poppins (Google Fonts)  
-**Weights:** 400, 500, 600, 700, 800
-
-**Principios de diseño:**
-- Mobile-first
-- Touch-friendly (min 44px tap targets)
-- Teal gradient headers
-- Card-based layouts
-- Smooth animations
+## Comportamiento por status
+| Status | INICIO | REPORTE | CIERRE |
+|---|---|---|---|
+| Programmed | Activo (mostrar EMPEZAR) | Bloqueado | Bloqueado |
+| In Progress | Activo (en progreso) | Activo | Activo |
+| Done | Grayscale bloqueado | Activo solo lectura | Grayscale bloqueado |
 
 ---
 
-## 📞 **PROYECTO INFO**
-
-**Owner:** Juan Uribe  
-**Email:** juribe4@gmail.com  
-**Empresa:** ShineUP Cleaning Services  
-**Ubicación:** Columbus, Ohio  
-
-**Servicios:**
-- STR/Airbnb Turnover
-- Deep Cleaning
-- Move-in/Move-out
-- Post-construction
-- Luxury Residential Maintenance
+## Notas tecnicas criticas
+- **Zite SWC:** No acepta Unicode en comentarios JS/JSX (em dash, box-drawing). Usar `-` siempre.
+- **Airtable formula fields:** Devuelven "No data" en `findOne()`. Workaround: duplicar en campo plain text.
+- **videoInicial:** Attachment en Airtable → siempre devolver array de URLs, nunca string solo.
+- **propertyId:** Extraido de `raw.property[0]` en `getCleaningTasks`, incluido en return para que filtros funcionen.
+- **context.user.id** = Staff record ID (User Sync configurado: tabla Staff, email = Email).
+- **Logs Zite:** Solo visibles en Zite workflow run logs, no en browser console.
+- **Modales:** Deben estar FUERA del div `px-4 pt-5 pb-24` (content div), dentro del div raiz `min-h-screen`.
 
 ---
 
-## 🔗 **LINKS IMPORTANTES**
-
-**Repositorio:** https://github.com/juribe4-ready/ShineUp-Cleanings-Today  
-**Zite App:** build.fillout.com  
-**Airtable Base:** [Private]  
-
----
-
-## 📊 **MÉTRICAS**
-
-**Archivos totales:** 11  
-**Componentes React:** 4  
-**Endpoints:** 4  
-**Tablas Airtable:** 5+  
-
-**Líneas de código:** ~1,500+ (estimado)
-
----
-
-## 🎯 **PRÓXIMA SESIÓN**
-
-**Posibles mejoras a considerar:**
-1. Dashboard Timeline con datos reales
-2. Nuevas funcionalidades según necesidad
-3. Refinamientos de UX basados en feedback
-4. Landing pages para marketing
-
----
-
-**GitHub Setup:** ✅ Completado  
-**Última sesión:** 2026-03-10  
-**Estado general:** 🟢 Funcionando excelente
+## Pendiente / Futuro
+- Push notifications para nuevas asignaciones
+- Dashboard Timeline admin (proyecto Zite separado)
+- Landing pages 5 servicios HTML/CSS
+- Flujo resolver/cerrar incidentes (admin)
