@@ -48,16 +48,13 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const reporteRef = useRef<HTMLDivElement>(null);
   const cierreRef = useRef<HTMLDivElement>(null);
 
-  // Inicio
   const [videoThumbs, setVideoThumbs] = useState<string[]>([]);
   const [rating, setRating] = useState<number>(0);
   const [isInProgress, setIsInProgress] = useState(false);
+  const [isDone, setIsDone] = useState(false);
   const [startingCleaning, setStartingCleaning] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  // Reporte
-
-  // Incidents list
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [incidentsLoading, setIncidentsLoading] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
@@ -69,7 +66,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [uploadingIncPhoto, setUploadingIncPhoto] = useState(false);
   const incPhotoRef = useRef<HTMLInputElement>(null);
 
-  // Client Inventory
   const [inventoryRecords, setInventoryRecords] = useState<InventoryRecord[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState<InventoryRecord | null>(null);
@@ -81,7 +77,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const [uploadingInvPhoto, setUploadingInvPhoto] = useState(false);
   const invPhotoRef = useRef<HTMLInputElement>(null);
 
-  // Cierre
   const [closingPhotos, setClosingPhotos] = useState<{ url: string; name: string }[]>([]);
   const [uploadingClosing, setUploadingClosing] = useState(false);
   const [finishing, setFinishing] = useState(false);
@@ -91,28 +86,24 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
   useEffect(() => { loadDetails(); }, [cleaning.id]);
 
-  // Scroll spy - update active tab based on scroll position
   useEffect(() => {
-    const handleScroll = () => {
-      const headerOffset = 220;
+    const onScroll = () => {
+      const offset = 220;
       const sections = [
         { key: 'cierre' as TabType, ref: cierreRef },
         { key: 'reporte' as TabType, ref: reporteRef },
         { key: 'inicio' as TabType, ref: inicioRef },
         { key: 'detalle' as TabType, ref: detalleRef },
       ];
-      for (const section of sections) {
-        if (section.ref.current) {
-          const top = section.ref.current.getBoundingClientRect().top;
-          if (top <= headerOffset) {
-            setActiveTab(section.key);
-            break;
-          }
+      for (const s of sections) {
+        if (s.ref.current && s.ref.current.getBoundingClientRect().top <= offset) {
+          setActiveTab(s.key);
+          break;
         }
       }
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   const loadIncidents = async (propId?: string) => {
@@ -124,6 +115,15 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     finally { setIncidentsLoading(false); }
   };
 
+  const loadInventory = async (propId?: string) => {
+    setInventoryLoading(true);
+    try {
+      const result = await getInventory({ propertyId: propId });
+      setInventoryRecords(result as any);
+    } catch { }
+    finally { setInventoryLoading(false); }
+  };
+
   const loadDetails = async () => {
     try {
       setLoading(true);
@@ -131,12 +131,12 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       setDetails(result.cleaning);
       setTasks(result.tasks);
       setIsInProgress(result.cleaning.status === 'In Progress');
+      setIsDone(result.cleaning.status === 'Done');
       if (result.cleaning.rating) setRating(result.cleaning.rating);
       if (result.cleaning.videoInicial?.length) setVideoThumbs(result.cleaning.videoInicial as any);
       if (result.cleaning.photosVideos?.length) {
         setClosingPhotos(result.cleaning.photosVideos.map((p: any) => ({ url: p.url || p, name: p.filename || 'archivo' })));
       }
-      // Load incidents filtered by this property
       const propId = (result.cleaning as any).propertyId;
       loadIncidents(propId);
       loadInventory(propId);
@@ -152,18 +152,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     const refMap: Record<TabType, { current: HTMLDivElement | null }> = {
       detalle: detalleRef, inicio: inicioRef, reporte: reporteRef, cierre: cierreRef,
     };
-    
-    // Scroll to section with offset for sticky header
     const element = refMap[tab].current;
     if (element) {
-      const headerOffset = 200; // Altura del header sticky + margen extra
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
+      const offsetPosition = element.getBoundingClientRect().top + window.pageYOffset - 200;
+      window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
     }
   };
 
@@ -185,7 +177,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleRating = async (value: number) => {
     setRating(value);
     try { await updateCleaningTime({ cleaningId: cleaning.id, rating: value } as any); }
-    catch { toast.error('Error al guardar calificación'); }
+    catch { toast.error('Error al guardar'); }
   };
 
   const handleStart = async () => {
@@ -193,8 +185,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     try {
       await updateCleaningTime({ cleaningId: cleaning.id, startTime: new Date().toISOString(), status: 'In Progress' });
       setIsInProgress(true);
-      toast.success('¡Limpieza iniciada!');
-      // Scroll to reporte after short delay to let state update
+      toast.success('Limpieza iniciada!');
       setTimeout(() => scrollToSection('reporte'), 300);
     } catch { toast.error('Error al iniciar'); }
     finally { setStartingCleaning(false); }
@@ -204,7 +195,8 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setFinishing(true);
     try {
       await updateCleaningTime({ cleaningId: cleaning.id, endTime: new Date().toISOString(), status: 'Done' });
-      toast.success('¡Limpieza finalizada!');
+      setIsDone(true);
+      toast.success('Limpieza finalizada!');
       onBack();
     } catch { toast.error('Error al finalizar'); }
     finally { setFinishing(false); }
@@ -213,7 +205,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const handleClosingPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
-    // Capture file list immediately before any async work (the FileList can become null)
     const fileArray = Array.from(files);
     setUploadingClosing(true);
     try {
@@ -227,17 +218,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       setUploadingClosing(false);
       if (closingInputRef.current) closingInputRef.current.value = '';
     }
-  };
-
-  const loadInventory = async (propId?: string) => {
-    setInventoryLoading(true);
-    try {
-      const result = await getInventory({ propertyId: propId });
-      setInventoryRecords(result as any);
-    } catch (err) {
-      console.error('[loadInventory error]', err);
-    }
-    finally { setInventoryLoading(false); }
   };
 
   const handleInvPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -257,7 +237,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
 
   const handleSaveInventory = async () => {
     setSavingInventory(true);
-    // Optimistic update - close modal and show in list immediately
     const optimistic: InventoryRecord = {
       id: `tmp-${Date.now()}`,
       status: newInvStatus,
@@ -275,7 +254,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
     setNewInvComment('');
     setNewInvPhotos([]);
     try {
-      console.log('[addInventory] calling', { status: savedStatus, comment: savedComment });
       await addInventory({
         status: savedStatus,
         comment: savedComment.trim(),
@@ -285,7 +263,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       });
       toast.success('Inventario registrado');
     } catch (err: any) {
-      console.error('[addInventory error]', err);
       toast.error('Error: ' + (err?.message || 'desconocido'));
       setInventoryRecords(prev => prev.filter(r => r.id !== optimistic.id));
     }
@@ -346,10 +323,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const starLabels = ['Malo', 'Regular', 'Bueno'];
 
   const tabs: { key: TabType; label: string; Icon: any }[] = [
-    { key: 'detalle', label: 'DETALLE',  Icon: Home },
-    { key: 'inicio',  label: 'INICIO',   Icon: Play },
-    { key: 'reporte', label: 'REPORTE',  Icon: BarChart2 },
-    { key: 'cierre',  label: 'CIERRE',   Icon: Flag },
+    { key: 'detalle', label: 'DETALLE', Icon: Home },
+    { key: 'inicio',  label: 'INICIO',  Icon: Play },
+    { key: 'reporte', label: 'REPORTE', Icon: BarChart2 },
+    { key: 'cierre',  label: 'CIERRE',  Icon: Flag },
   ];
 
   if (loading) return (
@@ -361,33 +338,25 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   return (
     <div className="min-h-screen bg-[#F0F4F8]" style={{ fontFamily: "'Poppins', sans-serif" }}>
 
-      {/* -- STICKY HEADER ----------------------------------------------- */}
-      <div
-        className="sticky top-0 z-50 rounded-b-3xl shadow-xl"
-        style={{ background: `linear-gradient(145deg, ${TEAL_DARK} 0%, ${TEAL} 60%, #26C6DA 100%)` }}
-      >
+      {/* STICKY HEADER */}
+      <div className="sticky top-0 z-50 rounded-b-3xl shadow-xl"
+        style={{ background: `linear-gradient(145deg, ${TEAL_DARK} 0%, ${TEAL} 60%, #26C6DA 100%)` }}>
         <div className="flex items-center justify-between px-4 pt-10 pb-3">
-          {/* BOTÓN VOLVER MÁS NOTORIO */}
-          <button 
-            onClick={onBack} 
+          <button onClick={onBack}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg transition-transform active:scale-95"
-            style={{ background: 'rgba(255,255,255,0.95)', color: TEAL }}
-          >
+            style={{ background: 'rgba(255,255,255,0.95)', color: TEAL }}>
             <ArrowLeft className="w-5 h-5" strokeWidth={3} />
             <span>Volver</span>
           </button>
-          
-          {/* PROPERTY TEXT A LA DERECHA */}
           <div className="text-right">
             <span className="text-white font-black text-base tracking-tight block leading-tight">
-              {(details?.propertyText || 'DILINI').toUpperCase()}
+              {(details?.propertyText || 'ShineUP').toUpperCase()}
             </span>
             <p className="text-white/80 text-[10px] font-semibold uppercase tracking-wide mt-0.5">
               {details?.cleaningTypeText || 'Standard STR Turnover'}
             </p>
           </div>
         </div>
-
         <div className="px-4 pb-2">
           <div className="flex justify-between text-white/80 text-[10px] font-bold mb-1 uppercase tracking-wide">
             <span>Progreso de Tareas</span>
@@ -398,7 +367,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               style={{ width: `${progress}%`, background: progress === 100 ? '#00E676' : 'rgba(255,255,255,0.9)' }} />
           </div>
         </div>
-
         <div className="grid grid-cols-4">
           {tabs.map(({ key, label, Icon }) => {
             const active = activeTab === key;
@@ -413,7 +381,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
       </div>
 
-      {/* -- CONTENT ----------------------------------------------------- */}
+      {/* CONTENT */}
       <div className="px-4 pt-5 pb-24 space-y-6">
 
         {/* DETALLE */}
@@ -424,20 +392,16 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               <div className="flex items-start gap-2 flex-1">
                 <span className="text-base mt-0.5">📍</span>
                 <div>
-                  <p className="font-bold text-slate-800 text-[14px] leading-snug">{details?.propertyText || details?.address || 'Sin dirección'}</p>
+                  <p className="font-bold text-slate-800 text-[14px] leading-snug">{details?.propertyText || details?.address || 'Sin direccion'}</p>
                   {details?.propertyText && details?.address && (
                     <p className="text-[11px] text-slate-400 mt-0.5">{details.address}</p>
                   )}
                 </div>
               </div>
               {details?.googleMapsUrl && (
-                <a 
-                  href={details.googleMapsUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
+                <a href={details.googleMapsUrl} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg shrink-0 transition-all active:scale-95 shadow-sm"
-                  style={{ background: TEAL, color: 'white' }}
-                >
+                  style={{ background: TEAL, color: 'white' }}>
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/>
                     <circle cx="12" cy="10" r="3"/>
@@ -446,8 +410,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </a>
               )}
             </div>
-
-            {/* BOOK BUTTON - PROMINENTE */}
             {details?.bookUrl && (
               <a href={details.bookUrl} target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl text-[13px] font-black transition-all active:scale-95 shadow-md"
@@ -455,8 +417,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 <BookOpen className="w-4 h-4" /> Ver Book de la Propiedad
               </a>
             )}
-
-            {/* TABLA DE HORAS 2x2 */}
             <div className="rounded-xl overflow-hidden border border-slate-200">
               <table className="w-full text-[11px]">
                 <thead>
@@ -475,7 +435,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   <tr className="border-t border-slate-100">
                     <td className="px-4 py-3 font-semibold text-slate-400 uppercase tracking-wide">HORA FIN</td>
                     <td className="px-3 py-3 text-center font-black text-slate-900">
-                      {details?.scheduledTime 
+                      {details?.scheduledTime
                         ? formatTime(new Date(new Date(details.scheduledTime).getTime() + 90 * 60000).toISOString())
                         : '--:--'}
                     </td>
@@ -484,7 +444,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </tbody>
               </table>
             </div>
-
             {details?.assignedStaffNames?.length ? (
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: TEAL_LIGHT }}>
@@ -496,7 +455,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               </div>
             ) : null}
-
             {details?.equipment?.length ? (
               <div className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: TEAL_LIGHT }}>
@@ -515,8 +473,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               </div>
             ) : null}
-
-            {/* INITIAL COMMENTS */}
             {details?.initialComments && (
               <div className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#FFF3E0' }}>
@@ -534,16 +490,14 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
 
         {/* INICIO */}
-        <div ref={inicioRef}>
+        <div ref={inicioRef} style={{ filter: isDone ? 'grayscale(1)' : 'none', opacity: isDone ? 0.5 : 1, pointerEvents: isDone ? 'none' : 'auto', transition: 'all 0.3s' }}>
           <SectionTitle>INICIO</SectionTitle>
           <div className="bg-white rounded-2xl p-5 shadow-sm space-y-6">
-
-            {/* Step 1 */}
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]" style={{ background: TEAL }}>1</div>
               <div className="flex-1">
                 <p className="font-bold text-slate-800 text-[15px] mb-0.5">Sube el video inicial</p>
-                <p className="text-[12px] text-slate-400 mb-3">Registra cómo encontraste la propiedad al ingresar</p>
+                <p className="text-[12px] text-slate-400 mb-3">Registra como encontraste la propiedad al ingresar</p>
                 {videoThumbs.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
                     {videoThumbs.map((url, i) => (
@@ -559,17 +513,14 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   </div>
                 )}
                 <input ref={videoInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleVideoUpload} />
-                <button onClick={() => videoInputRef.current?.click()}
+                <button onClick={() => !isDone && videoInputRef.current?.click()}
                   className="w-full py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
                   style={{ borderColor: TEAL, color: TEAL, background: videoThumbs.length > 0 ? TEAL_LIGHT : 'transparent' }}>
                   <Camera className="w-4 h-4" /> Seleccionar video / foto
                 </button>
               </div>
             </div>
-
             <div className="h-px bg-slate-100" />
-
-            {/* Step 2 */}
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]"
                 style={{ background: rating > 0 ? GREEN_ACTIVE : TEAL }}>
@@ -577,10 +528,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               </div>
               <div className="flex-1">
                 <p className="font-bold text-slate-800 text-[15px] mb-0.5">Califica el estado de la propiedad</p>
-                <p className="text-[12px] text-slate-400 mb-3">Selecciona de 1 a 3 estrellas según las condiciones al llegar</p>
+                <p className="text-[12px] text-slate-400 mb-3">Selecciona de 1 a 3 estrellas</p>
                 <div className="flex items-center gap-4">
                   {[1, 2, 3].map(v => (
-                    <button key={v} onClick={() => handleRating(v)} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
+                    <button key={v} onClick={() => !isDone && handleRating(v)} className="flex flex-col items-center gap-1 transition-transform active:scale-90">
                       <Star className="w-10 h-10"
                         fill={rating >= v ? '#FFD700' : 'none'}
                         stroke={rating >= v ? '#FFD700' : '#CBD5E1'}
@@ -592,10 +543,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               </div>
             </div>
-
             <div className="h-px bg-slate-100" />
-
-            {/* Step 3 */}
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[13px]"
                 style={{ background: isInProgress ? GREEN_ACTIVE : TEAL }}>
@@ -603,7 +551,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               </div>
               <div className="flex-1">
                 <p className="font-bold text-slate-800 text-[15px] mb-3">Inicia la limpieza</p>
-                {!isInProgress ? (
+                {!isInProgress && !isDone ? (
                   <button onClick={handleStart} disabled={startingCleaning}
                     className="w-full py-4 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
                     style={{ background: '#00E676' }}>
@@ -611,6 +559,10 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                       ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                       : <><Play className="w-4 h-4" fill="white" /> EMPEZAR LIMPIEZA</>}
                   </button>
+                ) : isDone ? (
+                  <div className="w-full py-3 rounded-2xl text-white font-bold text-[13px] flex items-center justify-center gap-2" style={{ background: '#00C853' }}>
+                    <CheckCircle2 className="w-4 h-4" /> Limpieza completada
+                  </div>
                 ) : (
                   <div className="w-full py-3 rounded-2xl text-white font-bold text-[13px] flex items-center justify-center gap-2" style={{ background: '#00C853' }}>
                     <CheckCircle2 className="w-4 h-4" /> Limpieza en progreso
@@ -619,7 +571,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
               </div>
             </div>
           </div>
-
           {isInProgress && tasks.length > 0 && (
             <div className="mt-3">
               <TaskChecklist tasks={tasks} completedTasks={completedTasks} onToggle={toggleTask} />
@@ -631,13 +582,11 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         <div ref={reporteRef}>
           <SectionTitle>REPORTE</SectionTitle>
 
-          {/* CLIENT INVENTORY - primero */}
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          {/* INVENTARIO DEL CLIENTE */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-3">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <span className="text-[13px] font-black text-slate-800">Inventario del Cliente</span>
-              <button
-                onClick={() => isInProgress && setShowNewInventory(true)}
-                disabled={!isInProgress}
+              <button onClick={() => isInProgress && setShowNewInventory(true)} disabled={!isInProgress}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-bold transition-all active:scale-95"
                 style={{ background: isInProgress ? TEAL : '#CBD5E1' }}>
                 <Plus className="w-3.5 h-3.5" /> Nuevo
@@ -667,9 +616,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                           </span>
                         )}
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          rec.status === 'Out of Stock' ? 'bg-red-50 text-red-500' :
-                          rec.status === 'Low' ? 'bg-amber-50 text-amber-600' :
-                          'bg-slate-100 text-slate-400'
+                          rec.status === 'Out of Stock' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-600'
                         }`}>{rec.status}</span>
                         <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
                       </div>
@@ -681,343 +628,70 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
             {!isInProgress && <p className="text-[10px] text-slate-400 text-center pb-3">Inicia la limpieza para registrar</p>}
           </div>
 
-          {/* INCIDENTS LIST - segundo */}
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden mt-3">
+          {/* INCIDENTES */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <span className="text-[13px] font-black text-slate-800">Incidentes</span>
-              <button
-                onClick={() => isInProgress && setShowNewIncident(true)}
-                disabled={!isInProgress}
+              <button onClick={() => isInProgress && setShowNewIncident(true)} disabled={!isInProgress}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[12px] font-bold transition-all active:scale-95"
                 style={{ background: isInProgress ? TEAL : '#CBD5E1' }}>
                 <Plus className="w-3.5 h-3.5" /> Nuevo
               </button>
             </div>
             <div style={{ pointerEvents: isInProgress ? 'auto' : 'none', opacity: isInProgress ? 1 : 0.55 }}>
-            {incidentsLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="w-6 h-6 border-2 border-slate-200 border-t-teal-400 rounded-full animate-spin" />
-              </div>
-            ) : incidents.length === 0 ? (
-              <div className="flex flex-col items-center py-8 text-slate-400">
-                <AlertCircle className="w-8 h-8 mb-2 opacity-30" />
-                <p className="text-[12px]">Sin incidentes registrados</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-50">
-                {incidents.map(inc => {
-                  const isOpen = inc.status !== 'Closed';
-                  return (
-                    <button key={inc.id} onClick={() => setSelectedIncident(inc)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: isOpen ? '#FBA730' : '#CBD5E1' }} />
-                      <span className="flex-1 text-[13px] font-semibold text-slate-700 truncate">{inc.name}</span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {inc.creationDate && (
-                          <span className="text-[10px] text-slate-400">
-                            {new Date(inc.creationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
-                          </span>
-                        )}
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          inc.status === 'Reported' ? 'bg-amber-50 text-amber-600' :
-                          inc.status === 'In Progress' ? 'bg-blue-50 text-blue-600' :
-                          inc.status === 'Closed' ? 'bg-green-50 text-green-600' :
-                          'bg-slate-100 text-slate-400'
-                        }`}>
-                          {inc.status}
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+              {incidentsLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-slate-200 border-t-teal-400 rounded-full animate-spin" />
+                </div>
+              ) : incidents.length === 0 ? (
+                <div className="flex flex-col items-center py-8 text-slate-400">
+                  <AlertCircle className="w-8 h-8 mb-2 opacity-30" />
+                  <p className="text-[12px]">Sin incidentes registrados</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {incidents.map(inc => {
+                    const isOpen = inc.status !== 'Closed';
+                    return (
+                      <button key={inc.id} onClick={() => setSelectedIncident(inc)}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: isOpen ? '#FBA730' : '#CBD5E1' }} />
+                        <span className="flex-1 text-[13px] font-semibold text-slate-700 truncate">{inc.name}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {inc.creationDate && (
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(inc.creationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                            </span>
+                          )}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            inc.status === 'Reported' ? 'bg-amber-50 text-amber-600' :
+                            inc.status === 'In Progress' ? 'bg-blue-50 text-blue-600' :
+                            inc.status === 'Closed' ? 'bg-green-50 text-green-600' :
+                            'bg-slate-100 text-slate-400'
+                          }`}>{inc.status}</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             {!isInProgress && <p className="text-[10px] text-slate-400 text-center pb-3">Inicia la limpieza para interactuar</p>}
           </div>
         </div>
 
-        {selectedIncident && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-5"
-            style={{ background: 'rgba(0,0,0,0.45)' }}
-            onClick={() => setSelectedIncident(null)}>
-            <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl overflow-hidden"
-              onClick={e => e.stopPropagation()}>
-
-              {/* Header suave */}
-              <div className="relative px-4 pt-4 pb-3" style={{ background: '#F1F5F9' }}>
-                <button onClick={() => setSelectedIncident(null)}
-                  className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white flex items-center justify-center">
-                  <X className="w-3 h-3 text-slate-400" />
-                </button>
-                <p className="font-black text-[15px] pr-7 text-slate-800">{selectedIncident.name}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    selectedIncident.status === 'Reported' ? 'bg-amber-100 text-amber-600' :
-                    selectedIncident.status === 'In Progress' ? 'bg-blue-100 text-blue-600' :
-                    selectedIncident.status === 'Closed' ? 'bg-green-100 text-green-600' :
-                    'bg-slate-200 text-slate-500'
-                  }`}>
-                    {selectedIncident.status}
-                  </span>
-                  {selectedIncident.creationDate && (
-                    <span className="text-[10px] text-slate-400">
-                      {new Date(selectedIncident.creationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Body */}
-              <div className="px-4 py-3 space-y-2.5">
-                {selectedIncident.reportedBy && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wide shrink-0" style={{ color: TEAL }}>Reportado por</span>
-                    <span className="text-[12px] font-semibold text-slate-700">{selectedIncident.reportedBy}</span>
-                  </div>
-                )}
-
-                {selectedIncident.comment ? (
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wide block mb-0.5" style={{ color: TEAL }}>Descripción</span>
-                    <span className="text-[12px] text-slate-600 leading-relaxed">{selectedIncident.comment}</span>
-                  </div>
-                ) : null}
-
-                {selectedIncident.photoUrls.length > 0 && (
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wide block mb-1.5" style={{ color: TEAL }}>Fotos</span>
-                    <div className="flex gap-2 flex-wrap">
-                      {selectedIncident.photoUrls.map((url, i) => (
-                        <div key={i} className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0"
-                          style={{ border: `1.5px solid ${TEAL_LIGHT}` }}>
-                          <img src={url} alt="foto" className="w-full h-full object-cover"
-                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* NEW INCIDENT MODAL */}
-        {showNewIncident && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
-            style={{ background: 'rgba(0,0,0,0.45)' }}
-            onClick={() => setShowNewIncident(false)}>
-            <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden"
-              onClick={e => e.stopPropagation()}>
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                <span className="font-black text-slate-800 text-[15px]">Nuevo Incidente</span>
-                <button onClick={() => setShowNewIncident(false)}
-                  className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
-                  <X className="w-3.5 h-3.5 text-slate-500" />
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="px-4 py-3 space-y-3">
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Nombre *</p>
-                  <input type="text" value={newIncName} onChange={e => setNewIncName(e.target.value)}
-                    placeholder="ej. Lavabo roto, Mancha en pared..."
-                    className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 transition-all"
-                    style={{ fontFamily: "'Poppins', sans-serif" }} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Descripción</p>
-                  <textarea value={newIncComment} onChange={e => setNewIncComment(e.target.value)}
-                    placeholder="Describe el incidente en detalle..."
-                    rows={3}
-                    className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 transition-all resize-none"
-                    style={{ fontFamily: "'Poppins', sans-serif" }} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Fotos</p>
-                  {newIncPhotos.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {newIncPhotos.map((url, i) => (
-                        <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
-                          <img src={url} alt="foto" className="w-full h-full object-cover"
-                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                          <button onClick={() => setNewIncPhotos(prev => prev.filter((_, j) => j !== i))}
-                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center">
-                            <X className="w-2.5 h-2.5 text-white" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <input ref={incPhotoRef} type="file" accept="image/*" multiple className="hidden" onChange={handleIncidentPhotoUpload} />
-                  <button onClick={() => incPhotoRef.current?.click()} disabled={uploadingIncPhoto}
-                    className="w-full py-2 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400 transition-all">
-                    <Camera className="w-3.5 h-3.5" />
-                    {uploadingIncPhoto ? 'Subiendo...' : 'Agregar fotos'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="px-4 pb-4">
-                <button onClick={handleSaveIncident} disabled={savingIncident}
-                  className="w-full py-3 rounded-xl text-white font-black text-[13px] flex items-center justify-center gap-2 transition-all active:scale-95"
-                  style={{ background: TEAL }}>
-                  {savingIncident
-                    ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    : '✓ Guardar Incidente'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-
-        {/* INVENTORY DETAIL MODAL */}
-        {selectedInventory && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-5"
-            style={{ background: 'rgba(0,0,0,0.45)' }}
-            onClick={() => setSelectedInventory(null)}>
-            <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl overflow-hidden"
-              onClick={e => e.stopPropagation()}>
-              <div className="relative px-4 pt-4 pb-3" style={{ background: '#F1F5F9' }}>
-                <button onClick={() => setSelectedInventory(null)}
-                  className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white flex items-center justify-center">
-                  <X className="w-3 h-3 text-slate-400" />
-                </button>
-                <p className="font-black text-[15px] pr-7 text-slate-800">{details?.propertyText || 'Propiedad'}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    selectedInventory.status === 'Out of Stock' ? 'bg-red-100 text-red-500' :
-                    'bg-amber-100 text-amber-600'
-                  }`}>{selectedInventory.status}</span>
-                  {selectedInventory.date && (
-                    <span className="text-[10px] text-slate-400">
-                      {new Date(selectedInventory.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="px-4 py-3 space-y-2.5">
-                {selectedInventory.reportedBy && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wide shrink-0" style={{ color: TEAL }}>Reportado por</span>
-                    <span className="text-[12px] font-semibold text-slate-700">{selectedInventory.reportedBy}</span>
-                  </div>
-                )}
-                {selectedInventory.comment && (
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wide block mb-0.5" style={{ color: TEAL }}>Comentario</span>
-                    <span className="text-[12px] text-slate-600 leading-relaxed">{selectedInventory.comment}</span>
-                  </div>
-                )}
-                {selectedInventory.photoUrls.length > 0 && (
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wide block mb-1.5" style={{ color: TEAL }}>Fotos</span>
-                    <div className="flex gap-2 flex-wrap">
-                      {selectedInventory.photoUrls.map((url, i) => (
-                        <div key={i} className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0"
-                          style={{ border: `1.5px solid ${TEAL_LIGHT}` }}>
-                          <img src={url} alt="foto" className="w-full h-full object-cover"
-                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* NEW INVENTORY MODAL */}
-        {showNewInventory && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-5"
-            style={{ background: 'rgba(0,0,0,0.45)' }}
-            onClick={() => setShowNewInventory(false)}>
-            <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl overflow-hidden"
-              onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                <span className="font-black text-slate-800 text-[15px]">Nuevo Registro</span>
-                <button onClick={() => setShowNewInventory(false)}
-                  className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
-                  <X className="w-3.5 h-3.5 text-slate-500" />
-                </button>
-              </div>
-              <div className="px-4 py-3 space-y-3">
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Estado *</p>
-                  <div className="flex gap-2">
-                    {(['Low', 'Out of Stock'] as const).map(s => (
-                      <button key={s} onClick={() => setNewInvStatus(s)}
-                        className={`flex-1 py-2 rounded-xl text-[12px] font-bold border transition-all ${newInvStatus === s
-                          ? s === 'Out of Stock' ? 'bg-red-50 border-red-300 text-red-500' : 'bg-amber-50 border-amber-300 text-amber-600'
-                          : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Comentario</p>
-                  <textarea value={newInvComment} onChange={e => setNewInvComment(e.target.value)}
-                    placeholder="¿Qué está faltando o bajo en stock?"
-                    rows={3}
-                    className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 transition-all resize-none"
-                    style={{ fontFamily: "'Poppins', sans-serif" }} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Foto del almacén</p>
-                  {newInvPhotos.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {newInvPhotos.map((url, i) => (
-                        <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
-                          <img src={url} alt="foto" className="w-full h-full object-cover"
-                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                          <button onClick={() => setNewInvPhotos(prev => prev.filter((_, j) => j !== i))}
-                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center">
-                            <X className="w-2.5 h-2.5 text-white" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <input ref={invPhotoRef} type="file" accept="image/*" multiple className="hidden" onChange={handleInvPhotoUpload} />
-                  <button onClick={() => invPhotoRef.current?.click()} disabled={uploadingInvPhoto}
-                    className="w-full py-2 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400">
-                    <Camera className="w-3.5 h-3.5" />
-                    {uploadingInvPhoto ? 'Subiendo...' : 'Agregar foto'}
-                  </button>
-                </div>
-              </div>
-              <div className="px-4 pb-4">
-                <button onClick={handleSaveInventory} disabled={savingInventory}
-                  className="w-full py-3 rounded-xl text-white font-black text-[13px] flex items-center justify-center gap-2 transition-all active:scale-95"
-                  style={{ background: TEAL }}>
-                  {savingInventory
-                    ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    : '✓ Guardar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* CIERRE */}
-        <div ref={cierreRef}>
+        <div ref={cierreRef} style={{ filter: isDone ? 'grayscale(1)' : 'none', opacity: isDone ? 0.5 : 1, pointerEvents: isDone ? 'none' : 'auto', transition: 'all 0.3s' }}>
           <SectionTitle>CIERRE</SectionTitle>
           <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
             <p className="font-bold text-slate-800 text-[15px] leading-snug">
-              Antes de terminar la limpieza, verifica que todo esté conforme al Book.
+              Antes de terminar la limpieza, verifica que todo este conforme al Book.
             </p>
             <div className="space-y-2">
               {[
                 'Carga foto o video dependiendo de la propiedad, este detalle lo dice el book',
-                'Cierra la limpieza (Botón rojo finish)',
+                'Cierra la limpieza (Boton rojo finish)',
               ].map((text, i) => (
                 <div key={i} className="flex gap-2.5 items-start">
                   <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white font-black text-[12px]" style={{ background: TEAL }}>{i + 1}</div>
@@ -1025,7 +699,6 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               ))}
             </div>
-
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Fotos y Videos</p>
               {closingPhotos.length > 0 && (
@@ -1043,26 +716,31 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               )}
               <input ref={closingInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleClosingPhotos} />
-              <button
-                onClick={() => isInProgress && closingInputRef.current?.click()}
-                disabled={!isInProgress || uploadingClosing}
+              <button onClick={() => isInProgress && !isDone && closingInputRef.current?.click()}
+                disabled={!isInProgress || uploadingClosing || isDone}
                 className="w-full py-3 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 text-[13px] font-bold transition-all"
                 style={{
-                  borderColor: isInProgress ? '#94A3B8' : '#CBD5E1',
-                  color: isInProgress ? '#64748B' : '#CBD5E1',
+                  borderColor: isInProgress && !isDone ? '#94A3B8' : '#CBD5E1',
+                  color: isInProgress && !isDone ? '#64748B' : '#CBD5E1',
                   background: 'transparent',
-                  cursor: isInProgress ? 'pointer' : 'not-allowed',
+                  cursor: isInProgress && !isDone ? 'pointer' : 'not-allowed',
                 }}>
                 <Camera className="w-4 h-4" />
-                {uploadingClosing ? 'Subiendo...' : 'Subir fotos / videos'}
+                {uploadingClosing ? 'Subiendo...' : (
+                  (details as any)?.closingMediaType?.toLowerCase().includes('photo') ? 'Subir Fotos' :
+                  (details as any)?.closingMediaType?.toLowerCase().includes('video') ? 'Subir Videos' :
+                  'Subir fotos / videos'
+                )}
               </button>
-              {!isInProgress && <p className="text-[11px] text-slate-400 mt-1 text-center">Inicia la limpieza para subir fotos</p>}
+              {!isInProgress && !isDone && <p className="text-[11px] text-slate-400 mt-1 text-center">Inicia la limpieza para subir fotos</p>}
+              {isDone && <p className="text-[11px] text-green-500 mt-1 text-center font-bold">Limpieza completada</p>}
             </div>
-
-            <button onClick={handleFinish} disabled={!isInProgress || finishing}
+            <button onClick={handleFinish} disabled={!isInProgress || finishing || isDone}
               className="w-full py-4 rounded-2xl text-white font-black text-[15px] flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95"
-              style={{ background: isInProgress ? '#F44336' : '#BDBDBD', cursor: isInProgress ? 'pointer' : 'not-allowed' }}>
-              {finishing
+              style={{ background: isDone ? '#00C853' : isInProgress ? '#F44336' : '#BDBDBD', cursor: isInProgress && !isDone ? 'pointer' : 'not-allowed' }}>
+              {isDone
+                ? <><CheckCircle2 className="w-5 h-5" /> LIMPIEZA TERMINADA</>
+                : finishing
                 ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 : '🏁 TERMINAR LIMPIEZA'}
             </button>
@@ -1070,6 +748,262 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
         </div>
 
       </div>
+
+      {/* INCIDENT DETAIL MODAL */}
+      {selectedIncident && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-5"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={() => setSelectedIncident(null)}>
+          <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="relative px-4 pt-4 pb-3" style={{ background: '#F1F5F9' }}>
+              <button onClick={() => setSelectedIncident(null)}
+                className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white flex items-center justify-center">
+                <X className="w-3 h-3 text-slate-400" />
+              </button>
+              <p className="font-black text-[15px] pr-7 text-slate-800">{selectedIncident.name}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  selectedIncident.status === 'Reported' ? 'bg-amber-100 text-amber-600' :
+                  selectedIncident.status === 'In Progress' ? 'bg-blue-100 text-blue-600' :
+                  selectedIncident.status === 'Closed' ? 'bg-green-100 text-green-600' :
+                  'bg-slate-200 text-slate-500'
+                }`}>{selectedIncident.status}</span>
+                {selectedIncident.creationDate && (
+                  <span className="text-[10px] text-slate-400">
+                    {new Date(selectedIncident.creationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3 space-y-2.5">
+              {selectedIncident.reportedBy && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wide shrink-0" style={{ color: TEAL }}>Reportado por</span>
+                  <span className="text-[12px] font-semibold text-slate-700">{selectedIncident.reportedBy}</span>
+                </div>
+              )}
+              {selectedIncident.comment && (
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wide block mb-0.5" style={{ color: TEAL }}>Descripcion</span>
+                  <span className="text-[12px] text-slate-600 leading-relaxed">{selectedIncident.comment}</span>
+                </div>
+              )}
+              {selectedIncident.photoUrls.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wide block mb-1.5" style={{ color: TEAL }}>Fotos</span>
+                  <div className="flex gap-2 flex-wrap">
+                    {selectedIncident.photoUrls.map((url, i) => (
+                      <div key={i} className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0"
+                        style={{ border: `1.5px solid ${TEAL_LIGHT}` }}>
+                        <img src={url} alt="foto" className="w-full h-full object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW INCIDENT MODAL */}
+      {showNewIncident && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={() => setShowNewIncident(false)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <span className="font-black text-slate-800 text-[15px]">Nuevo Incidente</span>
+              <button onClick={() => setShowNewIncident(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+                <X className="w-3.5 h-3.5 text-slate-500" />
+              </button>
+            </div>
+            <div className="px-4 py-3 space-y-3">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Nombre *</p>
+                <input type="text" value={newIncName} onChange={e => setNewIncName(e.target.value)}
+                  placeholder="ej. Lavabo roto, Mancha en pared..."
+                  className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 transition-all"
+                  style={{ fontFamily: "'Poppins', sans-serif" }} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Descripcion</p>
+                <textarea value={newIncComment} onChange={e => setNewIncComment(e.target.value)}
+                  placeholder="Describe el incidente en detalle..."
+                  rows={3}
+                  className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 transition-all resize-none"
+                  style={{ fontFamily: "'Poppins', sans-serif" }} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Fotos</p>
+                {newIncPhotos.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {newIncPhotos.map((url, i) => (
+                      <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                        <img src={url} alt="foto" className="w-full h-full object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <button onClick={() => setNewIncPhotos(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center">
+                          <X className="w-2.5 h-2.5 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <input ref={incPhotoRef} type="file" accept="image/*" multiple className="hidden" onChange={handleIncidentPhotoUpload} />
+                <button onClick={() => incPhotoRef.current?.click()} disabled={uploadingIncPhoto}
+                  className="w-full py-2 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400 transition-all">
+                  <Camera className="w-3.5 h-3.5" />
+                  {uploadingIncPhoto ? 'Subiendo...' : 'Agregar fotos'}
+                </button>
+              </div>
+            </div>
+            <div className="px-4 pb-4">
+              <button onClick={handleSaveIncident} disabled={savingIncident}
+                className="w-full py-3 rounded-xl text-white font-black text-[13px] flex items-center justify-center gap-2 transition-all active:scale-95"
+                style={{ background: TEAL }}>
+                {savingIncident
+                  ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  : 'Guardar Incidente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INVENTORY DETAIL MODAL */}
+      {selectedInventory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-5"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={() => setSelectedInventory(null)}>
+          <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="relative px-4 pt-4 pb-3" style={{ background: '#F1F5F9' }}>
+              <button onClick={() => setSelectedInventory(null)}
+                className="absolute top-3 right-3 w-6 h-6 rounded-full bg-white flex items-center justify-center">
+                <X className="w-3 h-3 text-slate-400" />
+              </button>
+              <p className="font-black text-[15px] pr-7 text-slate-800">{selectedInventory.comment || selectedInventory.status}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  selectedInventory.status === 'Out of Stock' ? 'bg-red-100 text-red-500' : 'bg-amber-100 text-amber-600'
+                }`}>{selectedInventory.status}</span>
+                {selectedInventory.date && (
+                  <span className="text-[10px] text-slate-400">
+                    {new Date(selectedInventory.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3 space-y-2.5">
+              {selectedInventory.reportedBy && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wide shrink-0" style={{ color: TEAL }}>Reportado por</span>
+                  <span className="text-[12px] font-semibold text-slate-700">{selectedInventory.reportedBy}</span>
+                </div>
+              )}
+              {selectedInventory.comment && (
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wide block mb-0.5" style={{ color: TEAL }}>Comentario</span>
+                  <span className="text-[12px] text-slate-600 leading-relaxed">{selectedInventory.comment}</span>
+                </div>
+              )}
+              {selectedInventory.photoUrls.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wide block mb-1.5" style={{ color: TEAL }}>Fotos</span>
+                  <div className="flex gap-2 flex-wrap">
+                    {selectedInventory.photoUrls.map((url, i) => (
+                      <div key={i} className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0"
+                        style={{ border: `1.5px solid ${TEAL_LIGHT}` }}>
+                        <img src={url} alt="foto" className="w-full h-full object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW INVENTORY MODAL */}
+      {showNewInventory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-5"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={() => setShowNewInventory(false)}>
+          <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <span className="font-black text-slate-800 text-[15px]">Nuevo Registro</span>
+              <button onClick={() => setShowNewInventory(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+                <X className="w-3.5 h-3.5 text-slate-500" />
+              </button>
+            </div>
+            <div className="px-4 py-3 space-y-3">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Estado *</p>
+                <div className="flex gap-2">
+                  {(['Low', 'Out of Stock'] as const).map(s => (
+                    <button key={s} onClick={() => setNewInvStatus(s)}
+                      className={`flex-1 py-2 rounded-xl text-[12px] font-bold border transition-all ${newInvStatus === s
+                        ? s === 'Out of Stock' ? 'bg-red-50 border-red-300 text-red-500' : 'bg-amber-50 border-amber-300 text-amber-600'
+                        : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Comentario</p>
+                <textarea value={newInvComment} onChange={e => setNewInvComment(e.target.value)}
+                  placeholder="Que esta faltando o bajo en stock?"
+                  rows={3}
+                  className="w-full px-3 py-2 text-[13px] rounded-xl border border-slate-200 outline-none focus:border-teal-400 transition-all resize-none"
+                  style={{ fontFamily: "'Poppins', sans-serif" }} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wide mb-1">Foto del almacen</p>
+                {newInvPhotos.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {newInvPhotos.map((url, i) => (
+                      <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                        <img src={url} alt="foto" className="w-full h-full object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <button onClick={() => setNewInvPhotos(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center">
+                          <X className="w-2.5 h-2.5 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <input ref={invPhotoRef} type="file" accept="image/*" multiple className="hidden" onChange={handleInvPhotoUpload} />
+                <button onClick={() => invPhotoRef.current?.click()} disabled={uploadingInvPhoto}
+                  className="w-full py-2 rounded-xl border border-dashed border-slate-300 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-slate-400">
+                  <Camera className="w-3.5 h-3.5" />
+                  {uploadingInvPhoto ? 'Subiendo...' : 'Agregar foto'}
+                </button>
+              </div>
+            </div>
+            <div className="px-4 pb-4">
+              <button onClick={handleSaveInventory} disabled={savingInventory}
+                className="w-full py-3 rounded-xl text-white font-black text-[13px] flex items-center justify-center gap-2 transition-all active:scale-95"
+                style={{ background: TEAL }}>
+                {savingInventory
+                  ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
