@@ -2,37 +2,41 @@ import { z } from 'zod';
 import { createEndpoint, Cleanings } from 'zite-integrations-backend-sdk';
 
 export default createEndpoint({
-  description: 'Uploads Drive links to a cleaning record',
+  description: 'Uploads photo/video URLs to a cleaning record (accumulates, does not overwrite)',
   inputSchema: z.object({
     cleaningId: z.string(),
     photoUrls: z.array(z.string()),
+    fileType: z.enum(['initial', 'closing']).optional(),
   }),
   outputSchema: z.object({
     success: z.boolean(),
   }),
   execute: async ({ input }) => {
-    console.log(`[DEBUG] Registrando link de Drive para: ${input.cleaningId}`);
+    console.log(`[DEBUG] Guardando ${input.photoUrls.length} archivo(s) para: ${input.cleaningId}`);
 
-    const cleaning = await Cleanings.findOne({ id: input.cleaningId });
+    const cleaning = await Cleanings.findOne({ id: input.cleaningId }) as any;
     if (!cleaning) throw new Error('Cleaning not found');
 
-    // Tomamos la primera URL (el enlace que Fillout ya subió a Drive)
-    const driveUrl = input.photoUrls[0] || "";
+    // Get existing photos and accumulate
+    const existing: any[] = Array.isArray(cleaning.photosVideos) ? cleaning.photosVideos : [];
+    const prefix = input.fileType === 'initial' ? '[INICIAL]' : '[CIERRE]';
+    const newEntries = input.photoUrls.map(url => ({ url, filename: `${prefix} archivo` }));
+    const combined = [...existing, ...newEntries];
 
     try {
       await Cleanings.update({
         id: input.cleaningId,
         record: {
-          photosVideos: driveUrl ? [{ url: driveUrl, filename: 'Video de Drive' } as any] : []
+          photosVideos: combined as any,
         },
       });
 
-      console.log(`[EXITO] Enlace de Drive guardado correctamente`);
+      console.log(`[EXITO] ${combined.length} archivo(s) guardados correctamente`);
       return { success: true };
 
     } catch (error: any) {
-      console.error("!!!!!!!! ERROR AL GUARDAR EN DRIVE MEDIA !!!!!!!!", error);
-      throw new Error(`Fallo al registrar enlace: ${error.message}`);
+      console.error('ERROR AL GUARDAR FOTOS', error);
+      throw new Error(`Fallo al guardar: ${error.message}`);
     }
   },
 });
