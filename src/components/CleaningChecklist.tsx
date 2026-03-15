@@ -49,6 +49,9 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
   const cierreRef = useRef<HTMLDivElement>(null);
 
   const [videoThumbs, setVideoThumbs] = useState<string[]>([]);
+  const [editableInstructions, setEditableInstructions] = useState('');
+  const [openComments, setOpenComments] = useState('');
+  const [openCommentsSaved, setOpenCommentsSaved] = useState(false);
   const [rating, setRating] = useState<number>(0);
   const [isInProgress, setIsInProgress] = useState(false);
   const [isDone, setIsDone] = useState(false);
@@ -134,6 +137,9 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       setIsDone(result.cleaning.status === 'Done');
       if (result.cleaning.rating) setRating(result.cleaning.rating);
       if (result.cleaning.videoInicial?.length) setVideoThumbs(result.cleaning.videoInicial as any);
+      setEditableInstructions((result.cleaning as any).initialComments || '');
+      setOpenComments((result.cleaning as any).openComments || '');
+      if (result.cleaning.videoInicial?.length) setOpenCommentsSaved(true);
       if (result.cleaning.photosVideos?.length) {
         setClosingPhotos(result.cleaning.photosVideos.map((p: any) => ({ url: p.url || p, name: p.filename || 'archivo' })));
       }
@@ -167,7 +173,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
       toast.info(`Subiendo ${fileArray.length} archivo(s)...`);
       const uploads = await Promise.all(fileArray.map(f => uploadFile({ data: f, filename: f.name })));
       const urls = uploads.map(r => r.fileUrl);
-      await updateCleaningTime({ cleaningId: cleaning.id, videoInicialUrls: urls } as any);
+      await updateCleaningTime({ cleaningId: cleaning.id, videoInicialUrls: urls, status: 'Opened' } as any);
       setVideoThumbs(prev => [...prev, ...urls]);
       toast.success(`${fileArray.length} archivo(s) subido(s)`);
     } catch { toast.error('Error al subir'); }
@@ -473,19 +479,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               </div>
             ) : null}
-            {details?.initialComments && (
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#FFF3E0' }}>
-                  <MessageSquare className="w-4 h-4" style={{ color: '#FF9800' }} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Instrucciones de esta limpieza</p>
-                  <div className="rounded-xl px-3 py-3 bg-amber-50 border border-amber-100">
-                    <p className="text-[13px] text-slate-700 leading-relaxed">{details.initialComments}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+
           </div>
         </div>
 
@@ -518,6 +512,63 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                   style={{ borderColor: TEAL, color: TEAL, background: videoThumbs.length > 0 ? TEAL_LIGHT : 'transparent' }}>
                   <Camera className="w-4 h-4" /> Seleccionar video / foto
                 </button>
+              </div>
+            </div>
+            <div className="h-px bg-slate-100" />
+
+            {/* INSTRUCCIONES */}
+            <div className="flex gap-3">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white" style={{ background: '#FF9800' }}>
+                <MessageSquare className="w-3.5 h-3.5" />
+              </div>
+              <div className="flex-1 space-y-2">
+
+                {/* InitialComments - solo lectura */}
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Instrucciones iniciales</p>
+                  <div className="rounded-xl px-3 py-2 bg-slate-50 border border-slate-100">
+                    <p className="text-[12px] text-slate-500 leading-relaxed">{editableInstructions || 'Sin instrucciones'}</p>
+                  </div>
+                </div>
+
+                {/* OpenComments - editable con video */}
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">
+                    Notas de apertura
+                    {videoThumbs.length > 0 && !openCommentsSaved && <span className="ml-1 text-amber-400">— se guarda al salir</span>}
+                  </p>
+                  <textarea
+                    value={openComments}
+                    onChange={e => { setOpenComments(e.target.value); setOpenCommentsSaved(false); }}
+                    onBlur={async () => {
+                      if (!openCommentsSaved && videoThumbs.length > 0) {
+                        try {
+                          await updateCleaningTime({ cleaningId: cleaning.id, initialComments: openComments } as any);
+                          setOpenCommentsSaved(true);
+                        } catch { toast.error('Error al guardar'); }
+                      }
+                    }}
+                    disabled={videoThumbs.length === 0 || openCommentsSaved}
+                    rows={2}
+                    placeholder={videoThumbs.length === 0 ? 'Sube el video para habilitar...' : 'Agrega notas...'}
+                    className="w-full px-3 py-2 text-[12px] rounded-xl border transition-all resize-none outline-none"
+                    style={{
+                      fontFamily: "'Poppins', sans-serif",
+                      borderColor: videoThumbs.length === 0 ? '#E2E8F0' : openCommentsSaved ? '#E2E8F0' : '#FF9800',
+                      background: videoThumbs.length === 0 || openCommentsSaved ? '#F8FAFC' : '#FFFBF5',
+                      color: videoThumbs.length > 0 ? '#1E293B' : '#94A3B8',
+                      cursor: videoThumbs.length === 0 || openCommentsSaved ? 'default' : 'text',
+                    }}
+                  />
+                  {videoThumbs.length > 0 && openCommentsSaved && (
+                    <button onClick={() => setOpenCommentsSaved(false)}
+                      className="mt-1 px-3 py-1 rounded-lg text-[11px] font-bold transition-all active:scale-95"
+                      style={{ background: '#E0F7FA', color: TEAL }}>
+                      Modificar
+                    </button>
+                  )}
+                </div>
+
               </div>
             </div>
             <div className="h-px bg-slate-100" />
