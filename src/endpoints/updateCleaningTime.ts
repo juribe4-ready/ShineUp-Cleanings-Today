@@ -13,6 +13,7 @@ export default createEndpoint({
     rating:            z.number().optional(),
     incidentComments:  z.string().optional(),
     inventoryComments: z.string().optional(),
+    initialComments:   z.string().optional(),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -23,7 +24,7 @@ export default createEndpoint({
     if (input.startTime    !== undefined) updateData.startTime    = input.startTime;
     if (input.endTime      !== undefined) updateData.endTime      = input.endTime;
     if (input.status       !== undefined) updateData.status       = input.status;
-    if (input.comments          !== undefined) updateData.Comments         = input.comments;
+    if (input.comments          !== undefined) updateData.InitialComments = input.comments;
     if (input.videoInicialUrls  !== undefined) {
       // Airtable attachment format — pass existing attachments to keep them, add new ones
       const existing = await (async () => {
@@ -41,6 +42,7 @@ export default createEndpoint({
       updateData.rating = ratingMap[input.rating] || input.rating;
     }
     if (input.incidentComments  !== undefined) updateData.IncidentComments  = input.incidentComments;
+    if (input.initialComments   !== undefined) updateData.OpenComments = input.initialComments;
     if (input.inventoryComments !== undefined) updateData.InventoryComments = input.inventoryComments;
 
     await Cleanings.update({
