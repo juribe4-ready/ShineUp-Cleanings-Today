@@ -442,7 +442,7 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                     <td className="px-4 py-3 font-semibold text-slate-400 uppercase tracking-wide">HORA FIN</td>
                     <td className="px-3 py-3 text-center font-black text-slate-900">
                       {details?.scheduledTime
-                        ? formatTime(new Date(new Date(details.scheduledTime).getTime() + 90 * 60000).toISOString())
+                        ? formatTime((details as any).estimatedEndTime || new Date(new Date(details.scheduledTime).getTime() + 90 * 60000).toISOString())
                         : '--:--'}
                     </td>
                     <td className="px-3 py-3 text-center font-bold text-slate-500">{formatTime(details?.endTime)}</td>
@@ -479,6 +479,20 @@ export default function CleaningChecklist({ cleaning, onBack }: Props) {
                 </div>
               </div>
             ) : null}
+
+            {(details as any)?.doorCodes && (
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#FFF3E0' }}>
+                  <span className="text-base">🔑</span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Codigos de Acceso</p>
+                  <div className="rounded-xl px-3 py-3 bg-amber-50 border border-amber-100">
+                    <p className="text-[13px] text-slate-700 leading-relaxed font-mono">{(details as any).doorCodes}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
           </div>
         </div>
