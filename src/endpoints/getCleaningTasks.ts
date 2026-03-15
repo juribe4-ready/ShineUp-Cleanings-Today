@@ -33,6 +33,7 @@ export default createEndpoint({
       driveMedia: z.string().optional(),
       equipment: z.array(z.object({ text: z.string(), code: z.string() })).optional(),
       initialComments: z.string().optional(),
+      openComments: z.string().optional(),
     }),
     tasks: z.array(z.any()),
   }),
@@ -41,88 +42,74 @@ export default createEndpoint({
     try {
       cleaning = await Cleanings.findOne({ id: input.cleaningId });
     } catch (e) {
-      // Zite sometimes throws even when data is returned — ignore and check below
+      // Zite sometimes throws even when data is returned
     }
     if (!cleaning) throw new Error('Cleaning not found');
 
-    // Staff names — wrap each findOne to avoid cascade failure
-    let assignedStaffNames: string[] = [];
-    if (cleaning.assignedStaff) {
-      const staffIds = Array.isArray(cleaning.assignedStaff) ? cleaning.assignedStaff : [cleaning.assignedStaff];
-      const staffRecords = await Promise.all(
-        staffIds.map(async (id: string) => {
-          try { return await Staff.findOne({ id }); } catch { return null; }
-        })
-      );
-      assignedStaffNames = staffRecords.filter((s: any) => s?.name).map((s: any) => s!.name!);
-    }
-    
-    // Tasks from checklist template
-    const cleaningTypeId = Array.isArray(cleaning.cleaningType) ? cleaning.cleaningType[0] : cleaning.cleaningType;
-    let tasks: any[] = [];
-    if (cleaningTypeId) {
-      const tasksResult = await ChecklistTemplatesTasks.findAll({ filters: { cleaningType: cleaningTypeId } });
-      tasks = tasksResult.records.map(task => ({
-        id: task.id,
-        taskName: task.taskName,
-        taskGroup: task.taskGroup,
-        order: task.order,
-      })).sort((a, b) => (a.order || 0) - (b.order || 0));
-    }
-
-    // Equipment — USAR EquipmentIDText
     const raw = cleaning as any;
+
+    // Preparar IDs antes de lanzar todo en paralelo
+    const staffIds: string[] = Array.isArray(cleaning.assignedStaff)
+      ? cleaning.assignedStaff
+      : cleaning.assignedStaff ? [cleaning.assignedStaff] : [];
+
+    const cleaningTypeId = Array.isArray(cleaning.cleaningType)
+      ? cleaning.cleaningType[0]
+      : cleaning.cleaningType;
+
     const equipmentIds: string[] = Array.isArray(raw['Equipment'] || raw.equipment)
       ? (raw['Equipment'] || raw.equipment)
       : raw['Equipment'] ? [raw['Equipment']] : [];
 
-    let equipment: { text: string; code: string }[] = [];
-    if (equipmentIds.length > 0) {
-      const equipRecords = await Promise.all(
-        equipmentIds.map(async (id: string) => {
-          try {
-            const rec = await Equipment.findOne({ id }) as any;
-            
-            const text = rec?.EquipmentText || rec?.equipmentText || 'Sin nombre';
-            
-            // Intentar en orden: EquipmentID > EquipmentIDText > Equipment Name > Make > EquipmentText
-            const code = 
-              rec?.EquipmentID || 
-              rec?.equipmentID || 
-              rec?.['Equipment ID'] ||
-              rec?.EquipmentIDText || 
-              rec?.equipmentIDText ||
-              rec?.['Equipment Name'] || 
-              rec?.equipmentName || 
-              rec?.EquipmentName ||
-              rec?.Make || 
-              rec?.make ||
-              rec?.EquipmentText ||
-              rec?.equipmentText ||
-              'N/A';
-            
-            return { text, code };
-          } catch {
-            return { text: id, code: id };
-          }
-        })
-      );
-      equipment = equipRecords.filter(Boolean) as { text: string; code: string }[];
-    }
+    const propertyIds: string[] = Array.isArray(raw.property)
+      ? raw.property
+      : raw.property ? [raw.property] : [];
 
-    // Book URL y InitialComments
-    let bookUrl = "";
-    let initialComments = "";
-    let closingMediaType = "";
-    const propertyIds: string[] = Array.isArray(raw.property) ? raw.property : (raw.property ? [raw.property] : []);
-    if (propertyIds.length > 0) {
-      try {
-        const prop = await Properties.findOne({ id: propertyIds[0] }) as any;
-        bookUrl = prop?.['Book URL'] || prop?.bookUrl || prop?.BookURL || "";
-        initialComments = raw.initialComments || raw.InitialComments || prop?.InitialComments || prop?.initialComments || "";
-        closingMediaType = prop?.['Video/Photo'] || prop?.VideoPhoto || prop?.videoPhoto || "";
-      } catch { /* ignore */ }
-    }
+    // Todas las llamadas a Airtable en paralelo
+    const [staffRecords, tasksResult, equipRecords, prop] = await Promise.all([
+      // Staff names
+      Promise.all(staffIds.map(async (id: string) => {
+        try { return await Staff.findOne({ id }); } catch { return null; }
+      })),
+      // Checklist tasks
+      cleaningTypeId
+        ? ChecklistTemplatesTasks.findAll({ filters: { cleaningType: cleaningTypeId } })
+        : Promise.resolve({ records: [] }),
+      // Equipment
+      Promise.all(equipmentIds.map(async (id: string) => {
+        try {
+          const rec = await Equipment.findOne({ id }) as any;
+          const text = rec?.EquipmentText || rec?.equipmentText || 'Sin nombre';
+          const code =
+            rec?.EquipmentID || rec?.equipmentID || rec?.['Equipment ID'] ||
+            rec?.EquipmentIDText || rec?.equipmentIDText ||
+            rec?.['Equipment Name'] || rec?.equipmentName || rec?.EquipmentName ||
+            rec?.Make || rec?.make || rec?.EquipmentText || rec?.equipmentText || 'N/A';
+          return { text, code };
+        } catch { return { text: id, code: id }; }
+      })),
+      // Property
+      propertyIds.length > 0
+        ? (Properties.findOne({ id: propertyIds[0] }) as Promise<any>).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    const assignedStaffNames: string[] = (staffRecords as any[])
+      .filter((s: any) => s?.name).map((s: any) => s.name);
+
+    const tasks = (tasksResult as any).records.map((task: any) => ({
+      id: task.id,
+      taskName: task.taskName,
+      taskGroup: task.taskGroup,
+      order: task.order,
+    })).sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
+    const equipment = (equipRecords as any[]).filter(Boolean) as { text: string; code: string }[];
+
+    const propData = prop as any;
+    const bookUrl = propData?.['Book URL'] || propData?.bookUrl || propData?.BookURL || "";
+    const initialComments = raw.initialComments || raw.InitialComments || propData?.InitialComments || propData?.initialComments || "";
+    const closingMediaType = propData?.['Video/Photo'] || propData?.VideoPhoto || propData?.videoPhoto || "";
 
     return {
       cleaning: {
@@ -146,10 +133,11 @@ export default createEndpoint({
         incidentComments: raw.incidentComments || raw.IncidentComments || "",
         inventoryComments: raw.inventoryComments || raw.InventoryComments || "",
         initialComments,
+        openComments: raw.OpenComments || raw.openComments || "",
         videoInicial: Array.isArray(raw.videoInicial)
-          ? raw.videoInicial.map((v: any) => v?.thumbnails?.large?.url || v?.url || '').filter(Boolean)
+          ? raw.videoInicial.map((v: any) => v?.thumbnails?.small?.url || v?.thumbnails?.large?.url || v?.url || '').filter(Boolean)
           : [],
-        photosVideos: raw.driveMedia 
+        photosVideos: raw.driveMedia
           ? [{ url: raw.driveMedia, filename: 'Video de Drive' }, ...(cleaning.photosVideos || [])]
           : (cleaning.photosVideos || []),
         rating: (() => {
@@ -157,9 +145,9 @@ export default createEndpoint({
           if (!r) return undefined;
           if (typeof r === 'number') return r;
           const s = String(r);
-          if (s.includes('⭐⭐⭐') || s.toLowerCase().includes('bueno')) return 3;
-          if (s.includes('⭐⭐') || s.toLowerCase().includes('normal')) return 2;
-          if (s.includes('⭐') || s.toLowerCase().includes('malo')) return 1;
+          if (s.includes('Bueno') || s.toLowerCase().includes('bueno')) return 3;
+          if (s.includes('Normal') || s.toLowerCase().includes('normal')) return 2;
+          if (s.includes('Malo') || s.toLowerCase().includes('malo')) return 1;
           return undefined;
         })(),
         driveMedia: raw.driveMedia || "",
