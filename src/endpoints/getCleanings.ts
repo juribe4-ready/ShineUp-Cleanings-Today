@@ -145,7 +145,7 @@ export default createEndpoint({
         equipmentCount,
         attachments: (Array.isArray(rawFrontView) ? rawFrontView : [rawFrontView])
           .filter(item => item && item.url)
-          .map(item => ({ url: item.url }))
+          .map(item => ({ url: item?.thumbnails?.large?.url || item.url }))
       };
     });
   },
