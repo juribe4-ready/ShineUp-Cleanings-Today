@@ -33,6 +33,8 @@ export default createEndpoint({
       driveMedia: z.string().optional(),
       equipment: z.array(z.object({ text: z.string(), code: z.string() })).optional(),
       initialComments: z.string().optional(),
+      doorCodes: z.string().optional(),
+      estimatedEndTime: z.string().optional(),
       openComments: z.string().optional(),
     }),
     tasks: z.array(z.any()),
@@ -110,6 +112,35 @@ export default createEndpoint({
     const bookUrl = propData?.['Book URL'] || propData?.bookUrl || propData?.BookURL || "";
     const initialComments = raw.initialComments || raw.InitialComments || propData?.InitialComments || propData?.initialComments || "";
     const closingMediaType = propData?.['Video/Photo'] || propData?.VideoPhoto || propData?.videoPhoto || "";
+    const doorCodes = propData?.DoorCodes || propData?.doorCodes || propData?.['Door Codes'] || propData?.['DoorCodes'] || "";
+    const labor: number = Number(propData?.Labor || propData?.labor || 0);
+
+    // Calculate estimated end time
+    const cleanerCount = (staffRecords as any[]).filter((s: any) => {
+      const role: string = s?.Role || s?.role || '';
+      return role.toLowerCase().includes('cleaner');
+    }).length;
+
+    const resolvedRating: number | undefined = (() => {
+      const r = raw.rating || raw.Rating;
+      if (!r) return undefined;
+      if (typeof r === 'number') return r;
+      const s = String(r);
+      if (s.includes('Bueno') || s.toLowerCase().includes('bueno')) return 3;
+      if (s.includes('Normal') || s.toLowerCase().includes('normal')) return 2;
+      if (s.includes('Malo') || s.toLowerCase().includes('malo')) return 1;
+      return undefined;
+    })();
+
+    let estimatedEndTime: string | undefined;
+    if (labor > 0 && cleaning.scheduledTime) {
+      const effectiveCleaners = Math.max(cleanerCount, 1);
+      const minutesRaw = labor / effectiveCleaners;
+      const minutesRounded = Math.ceil(minutesRaw / 15) * 15;
+      const ratingAdjustment = resolvedRating === 1 ? 30 : resolvedRating === 3 ? -30 : 0;
+      const totalMinutes = Math.max(minutesRounded + ratingAdjustment, 45);
+      estimatedEndTime = new Date(new Date(cleaning.scheduledTime).getTime() + totalMinutes * 60000).toISOString();
+    }
 
     return {
       cleaning: {
@@ -133,6 +164,8 @@ export default createEndpoint({
         incidentComments: raw.incidentComments || raw.IncidentComments || "",
         inventoryComments: raw.inventoryComments || raw.InventoryComments || "",
         initialComments,
+        doorCodes,
+        estimatedEndTime,
         openComments: raw.OpenComments || raw.openComments || "",
         videoInicial: Array.isArray(raw.videoInicial)
           ? raw.videoInicial.map((v: any) => v?.thumbnails?.small?.url || v?.thumbnails?.large?.url || v?.url || '').filter(Boolean)
